@@ -362,6 +362,12 @@ def run():
         
         #         $BA00-BFFF: | <not used>
         
+        # You need a (triple byte) lookup table with an entry for each begree, resulting in:
+        
+        # - Offset of x (0, 80, 160)
+        # - High or low code path (using $Axxx constants or $Bxxx constants)
+        # - RAM bank
+        
         # That way 6 begrees can fit into ONE RAM bank, meaning 256 begrees will fit into 256 / 6 = 43 RAM banks (~344kB)
         
 
