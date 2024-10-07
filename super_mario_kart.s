@@ -1,7 +1,4 @@
 
-; To generate mario files:      python utils/extract_tiles_and_tilemap.py
-; To generate perpective files: python utils/generate_mode7_tables.py
-
 ; To build:                 cl65 -t cx16 -o SD/SUPER-MARIO-KART.PRG super_mario_kart.s
 ; To run (from SD folder):  x16emu.exe -ram 2048 -prg SUPER-MARIO-KART.PRG -run
 
