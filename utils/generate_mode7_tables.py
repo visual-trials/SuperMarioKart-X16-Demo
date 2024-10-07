@@ -331,6 +331,39 @@ def run():
         filler = [0] * filler_size
     
         # FIXME: we do not want a filler added when loading these files from an SD card! (its better to fill in the assembler when including these files in a ROM)
+        
+        # IDEA: you need 10 bytes for each row on the screen. You have 80 rows on screen, so you need 800 bytes for one screen(angle).
+        #       for one type of byte (say x-low-increment) you need 80 bytes for one screen. You access each row by doing 'lda X_SUB_PIXEL_STEPS_LOW, x'
+        #       that 'x' however never exceeds 80. So you could fit THREE angles in 256 bytes (3*80 < 256).
+        #
+        #         $A000-A0FF: | x-low-increment (0-begrees) : 80 bytes  | x-low-increment (1-begrees) : 80 bytes  | x-low-increment (2-begrees) : 80 bytes |
+        #         $A100-A1FF: | y-low-increment (0-begrees) : 80 bytes  | y-low-increment (1-begrees) : 80 bytes  | y-low-increment (2-begrees) : 80 bytes |
+        #         $A200-A2FF: | x-high-increment (0-begrees) : 80 bytes | x-high-increment (1-begrees) : 80 bytes | x-high-increment (2-begrees) : 80 bytes |
+        #         $A300-A3FF: | y-high-increment (0-begrees) : 80 bytes | y-high-increment (1-begrees) : 80 bytes | y-high-increment (2-begrees) : 80 bytes |
+        #         $A400-A4FF: | x-pos-high (+ 1 sub bit)
+        #         $A500-A5FF: | y-pos-high (+ 1 sub bit)
+        #         $A600-A6FF: | x-pos-low
+        #         $A700-A7FF: | y-pos-low
+        #         $A800-A8FF: | x-pos-sub
+        #         $A900-A9FF: | y-pos-sub
+        
+        #         $AA00-AFFF: | <not used>
+        
+        #         $B000-B0FF: | x-low-increment (3-begrees) : 80 bytes  | x-low-increment (4-begrees) : 80 bytes  | x-low-increment (5-begrees) : 80 bytes |
+        #         $B100-B1FF: | y-low-increment (3-begrees) : 80 bytes  | y-low-increment (4-begrees) : 80 bytes  | y-low-increment (5-begrees) : 80 bytes |
+        #         $B200-B2FF: | x-high-increment (3-begrees) : 80 bytes | x-high-increment (4-begrees) : 80 bytes | x-high-increment (5-begrees) : 80 bytes |
+        #         $B300-B3FF: | y-high-increment (3-begrees) : 80 bytes | y-high-increment (4-begrees) : 80 bytes | y-high-increment (5-begrees) : 80 bytes |
+        #         $B400-B4FF: | x-pos-high (+ 1 sub bit)
+        #         $B500-B5FF: | y-pos-high (+ 1 sub bit)
+        #         $B600-B6FF: | x-pos-low
+        #         $B700-B7FF: | y-pos-low
+        #         $B800-B8FF: | x-pos-sub
+        #         $B900-B9FF: | y-pos-sub
+        
+        #         $BA00-BFFF: | <not used>
+        
+        # That way 6 begrees can fit into ONE RAM bank, meaning 256 begrees will fit into 256 / 6 = 43 RAM banks (~344kB)
+        
 
         map_file = {
             "x_subpixel_positions_in_map_low1" : "SD/TBL/PERS-A.BIN",
