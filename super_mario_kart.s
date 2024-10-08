@@ -1432,14 +1432,14 @@ perspective_data_loaded:
     
 FIRMWARE_X_POS = 100
 FIRMWARE_Y_POS = 19
-FIRMWARE_RAM_BANK_START = 1
+FIRMWARE_RAM_BANK_START = 1+0
 vera_firmware_version_text:
     .byte 22, 5, 18, 1, 0, 6, 9, 18, 13, 23, 1, 18, 5, 0, 22, 27, 37, 27, 37, 27 ; "VERA FIRMWARE V0.0.0"
 end_of_vera_firmware_version_text:
 
 DEMO_TITLE_X_POS = 98
 DEMO_TITLE_Y_POS = 9
-DEMO_TITLE_RAM_BANK_START = 11
+DEMO_TITLE_RAM_BANK_START = 1+10
 demo_title_text:
     .byte 6, 24, 0, 4, 5, 13, 15, 38, 0, 39, 13, 1, 18, 9, 15, 0, 11, 1, 18, 20, 39 ; 'FX DEMO: "MARIO KART"'
 end_of_demo_title_text:
@@ -1450,11 +1450,11 @@ end_of_demo_title_text:
     ; --------------------------------- BITMAPS --------------------------------------
     
 ; FIXME: this might be lower if less than 3 bitmap texts are drawn!
-LEFT_DOWN_RIGHT_KEY_RAM_BANK_START = 15
+LEFT_DOWN_RIGHT_KEY_RAM_BANK_START = 1+15
 LEFT_DOWN_RIGHT_KEY_Y_POS = 219
 LEFT_DOWN_RIGHT_KEY_X_POS = 140
     
-UP_KEY_RAM_BANK_START = 15+13
+UP_KEY_RAM_BANK_START = 1+15+13
 UP_KEY_Y_POS = LEFT_DOWN_RIGHT_KEY_Y_POS-14
 UP_KEY_X_POS = LEFT_DOWN_RIGHT_KEY_X_POS+14
 
