@@ -1,5 +1,3 @@
-![Super Mario Kart demo](assets/demo_screenshot.png?raw=true "Super Mario Kart demo")
-
 # Generate files
 
 To generate mario files run this script from the root folder:
@@ -29,4 +27,9 @@ To run using the emulator go to the SD folder and run this:
 # Run on real hardware
 
 To run on real hardware, copy the contents of the SD folder into a folder on your SD card and load/run SUPER-MARIO-KART.PRG
+
+# Screenshot
+
+![Super Mario Kart demo](assets/demo_screenshot.png?raw=true "Super Mario Kart demo")
+
 
