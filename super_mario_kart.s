@@ -1,6 +1,6 @@
 
 ; To build:                 cl65 -t cx16 -o SD/SUPER-MARIO-KART.PRG super_mario_kart.s
-; To run (from SD folder):  x16emu.exe -ram 2048 -prg SUPER-MARIO-KART.PRG -run
+; To run (from SD folder):  x16emu.exe -prg SUPER-MARIO-KART.PRG -run
 
 .org $080D
 .segment "STARTUP"
@@ -167,25 +167,36 @@ COPY_ROW_CODE               = $7800
 
 ; === Banked RAM addresses ===
 
+PERSPECTIVE_DATA_RAM_ADDRESS           = $A000
+PERSPECTIVE_DATA_RAM_BANK              = 1
 
-X_SUBPIXEL_POSITIONS_IN_MAP_LOW        = $A000
-X_SUBPIXEL_POSITIONS_IN_MAP_HIGH       = $A100
-Y_SUBPIXEL_POSITIONS_IN_MAP_LOW        = $A200
-Y_SUBPIXEL_POSITIONS_IN_MAP_HIGH       = $A300
-X_PIXEL_POSITIONS_IN_MAP_LOW           = $A400
-X_PIXEL_POSITIONS_IN_MAP_HIGH          = $A500
-Y_PIXEL_POSITIONS_IN_MAP_LOW           = $A600
-Y_PIXEL_POSITIONS_IN_MAP_HIGH          = $A700
-X_SUB_PIXEL_STEPS_LOW                  = $A800
-X_SUB_PIXEL_STEPS_HIGH                 = $A900
-Y_SUB_PIXEL_STEPS_LOW                  = $AA00
-Y_SUB_PIXEL_STEPS_HIGH                 = $AB00
+X_SUB_PIXEL_STEPS_HIGH_A0              = $A000
+Y_SUB_PIXEL_STEPS_HIGH_A0              = $A100
+X_SUB_PIXEL_STEPS_LOW_A0               = $A200
+Y_SUB_PIXEL_STEPS_LOW_A0               = $A300
+
+X_PIXEL_POSITIONS_IN_MAP_HIGH_A0       = $A400
+Y_PIXEL_POSITIONS_IN_MAP_HIGH_A0       = $A500
+X_PIXEL_POSITIONS_IN_MAP_LOW_A0        = $A600
+Y_PIXEL_POSITIONS_IN_MAP_LOW_A0        = $A700
+X_SUBPIXEL_POSITIONS_IN_MAP_HIGH_A0    = $A800
+Y_SUBPIXEL_POSITIONS_IN_MAP_HIGH_A0    = $A900
+
+X_SUB_PIXEL_STEPS_HIGH_B0              = $B000
+Y_SUB_PIXEL_STEPS_HIGH_B0              = $B100
+X_SUB_PIXEL_STEPS_LOW_B0               = $B200
+Y_SUB_PIXEL_STEPS_LOW_B0               = $B300
+
+X_PIXEL_POSITIONS_IN_MAP_HIGH_B0       = $B400
+Y_PIXEL_POSITIONS_IN_MAP_HIGH_B0       = $B500
+X_PIXEL_POSITIONS_IN_MAP_LOW_B0        = $B600
+Y_PIXEL_POSITIONS_IN_MAP_LOW_B0        = $B700
+X_SUBPIXEL_POSITIONS_IN_MAP_HIGH_B0    = $B800
+Y_SUBPIXEL_POSITIONS_IN_MAP_HIGH_B0    = $B900
+
 
 BITMAP_TEXT              = $AC00
 BITMAP = BITMAP_TEXT
-
-TILEMAP_ROM_BANK  = 25   ; Our tilemap starts at ROM Bank 25
-TILEDATA_ROM_BANK = 26   ; Our tiledata starts at ROM Bank 26
 
 
 start:
@@ -202,14 +213,13 @@ start:
     
     jsr clear_screen_slow
     jsr copy_palette_from_index_16
-    jsr copy_tables_to_banked_ram
+    jsr load_perspective_data_into_banked_ram
+
     jsr copy_tiledata_to_high_vram
     jsr copy_tilemap_to_high_vram
     
     jsr copy_mario_on_kart_pixels_to_high_vram
     jsr copy_kart_palette
-; FIXME: enable the sprite LATER!
-; FIXME: enable the sprite LATER!
 ; FIXME: enable the sprite LATER!
     jsr setup_mario_on_kart_sprite
     
@@ -329,7 +339,7 @@ draw_overview_map:
 ; ==================================== / OVERVIEW MAP ========================================
 
 ; ====================================== TILED PERSPECTIVE ========================================
-  
+
 draw_tiled_perspective:
 
     ; -- Initial world position --
@@ -348,8 +358,8 @@ draw_tiled_perspective:
     lda #2
     sta PLAYER_WORLD_Y_POSITION+1
 
-
     lda #128
+    
     sta VIEWING_ANGLE
 move_or_turn_around:
 
@@ -538,10 +548,6 @@ down_arrow_key_down_handled:
 
     ; -- Render world --
 
-    lda VIEWING_ANGLE
-    sta RAM_BANK
-
-
     ; Calculate the CAMERA position from the PLAYER position + VIEWING_ANGLE
             
     ldx VIEWING_ANGLE
@@ -570,6 +576,15 @@ down_arrow_key_down_handled:
     adc sine_values_high, x
     sta CAMERA_WORLD_X_POSITION+1
     
+; FIXME: HACK: we (for now) rotate 180 degrees ONLY for the PERSPECTIVE table lookup! 
+; FIXME: HACK: we (for now) rotate 180 degrees ONLY for the PERSPECTIVE table lookup! 
+; FIXME: HACK: we (for now) rotate 180 degrees ONLY for the PERSPECTIVE table lookup! 
+        lda VIEWING_ANGLE
+        clc
+        adc #128
+        tax
+        lda begree_to_bank, x
+        sta RAM_BANK
 
     ; FIXME: set variable that we have to use a DYNAMIC shot (using the TABLE FILES!)
     
@@ -671,8 +686,25 @@ setup_vram_done:
     ora #%01000000  ; blit write = 1
     sta VERA_FX_CTRL
     
+    
+    lda DO_DRAW_OVERVIEW_MAP
+    beq dynamic_row_offset_and_count
+    
+static_row_offset_and_count:
+    ldy #0
+    lda #80
+    sta row_count_cpy+1   ; We on-the-fly patch the cpy opcode here to make sure 80 rows will be drawn from our y-offset
+    bra row_offset_and_count_is_set
+    
+dynamic_row_offset_and_count:
+    ldy begree_to_y_offset, x
+    tya
+    clc
+    adc #80
+    sta row_count_cpy+1   ; We on-the-fly patch the cpy opcode here to make sure 80 rows will be drawn from our y-offset
+    
+row_offset_and_count_is_set:
 
-    ldx #0
     
 tiled_perspective_copy_next_row_1:
     
@@ -692,20 +724,28 @@ tiled_perspective_copy_next_row_1:
     ; sta VERA_CTRL
     
     lda DO_DRAW_OVERVIEW_MAP
-    bne setup_increment_and_positions_for_overview_map
+    beq setup_increment_and_positions_for_dynamic_view
+    jmp setup_increment_and_positions_for_overview_map
     
+setup_increment_and_positions_for_dynamic_view:
+
+    lda begree_to_a0_or_b0, x
+    bne setup_increment_and_positions_for_B0
+    
+setup_increment_and_positions_for_A0:
+
         ; We now set the increments
-        lda X_SUB_PIXEL_STEPS_LOW, x
+        lda X_SUB_PIXEL_STEPS_LOW_A0, y
         sta VERA_FX_X_INCR_L          ; X increment low
         
-        lda X_SUB_PIXEL_STEPS_HIGH, x
+        lda X_SUB_PIXEL_STEPS_HIGH_A0, y
         ; Note: the x32 is packed into the table-data
         sta VERA_FX_X_INCR_H
         
-        lda Y_SUB_PIXEL_STEPS_LOW, x
+        lda Y_SUB_PIXEL_STEPS_LOW_A0, y
         sta VERA_FX_Y_INCR_L
         
-        lda Y_SUB_PIXEL_STEPS_HIGH, x
+        lda Y_SUB_PIXEL_STEPS_HIGH_A0, y
         ; Note: the x32 is packed into the table-data
         sta VERA_FX_Y_INCR_H
             
@@ -714,24 +754,23 @@ tiled_perspective_copy_next_row_1:
         lda #%00001001           ; DCSEL=4, ADDRSEL=1
         sta VERA_CTRL
 
-        lda X_PIXEL_POSITIONS_IN_MAP_LOW, x
+        lda X_PIXEL_POSITIONS_IN_MAP_LOW_A0, y
         clc
         adc CAMERA_WORLD_X_POSITION
         sta VERA_FX_X_POS_L       ; X pixel position low [7:0]
-        lda X_PIXEL_POSITIONS_IN_MAP_HIGH, x
+        
+        lda X_PIXEL_POSITIONS_IN_MAP_HIGH_A0, y
         adc CAMERA_WORLD_X_POSITION+1
-        ora X_SUBPIXEL_POSITIONS_IN_MAP_LOW, x
         sta VERA_FX_X_POS_H        ; X subpixel position[0], X pixel position high [10:8]
         
-        lda Y_PIXEL_POSITIONS_IN_MAP_LOW, x
+        lda Y_PIXEL_POSITIONS_IN_MAP_LOW_A0, y
         clc
         adc CAMERA_WORLD_Y_POSITION
         sta VERA_FX_Y_POS_L        ; Y pixel position low [7:0]
-        lda Y_PIXEL_POSITIONS_IN_MAP_HIGH, x
+        
+        lda Y_PIXEL_POSITIONS_IN_MAP_HIGH_A0, y
         adc CAMERA_WORLD_Y_POSITION+1
-        ora Y_SUBPIXEL_POSITIONS_IN_MAP_LOW, x
-        ora #%01000000           ; Reset cache byte index = 1
-        sta VERA_FX_Y_POS_H      ; Y subpixel position[0], Reset cache byte index = 1, Y pixel position high [10:8]
+        sta VERA_FX_Y_POS_H      ; Y subpixel position[0], Y pixel position high [10:8]
         
         
         ; Setting the sub position
@@ -739,27 +778,28 @@ tiled_perspective_copy_next_row_1:
         lda #%00001011           ; DCSEL=5, ADDRSEL=1
         sta VERA_CTRL
         
-        lda X_SUBPIXEL_POSITIONS_IN_MAP_HIGH, x
+        lda X_SUBPIXEL_POSITIONS_IN_MAP_HIGH_A0, y
         sta VERA_FX_X_POS_S      ; X subpixel increment [8:1]
         
-        lda Y_SUBPIXEL_POSITIONS_IN_MAP_HIGH, x
+        lda Y_SUBPIXEL_POSITIONS_IN_MAP_HIGH_A0, y
         sta VERA_FX_Y_POS_S      ; Y subpixel increment [8:1]
     
-        bra done_setting_up_increments_and_positions
-    
-setup_increment_and_positions_for_overview_map:
-        ; We now set the increments
-        lda x_sub_pixel_steps_low, x
-        sta VERA_FX_X_INCR_L     ; X increment low
+        jmp done_setting_up_increments_and_positions
         
-        lda x_sub_pixel_steps_high, x
+setup_increment_and_positions_for_B0:
+    
+        ; We now set the increments
+        lda X_SUB_PIXEL_STEPS_LOW_B0, y
+        sta VERA_FX_X_INCR_L          ; X increment low
+        
+        lda X_SUB_PIXEL_STEPS_HIGH_B0, y
         ; Note: the x32 is packed into the table-data
         sta VERA_FX_X_INCR_H
         
-        lda y_sub_pixel_steps_low, x
+        lda Y_SUB_PIXEL_STEPS_LOW_B0, y
         sta VERA_FX_Y_INCR_L
         
-        lda y_sub_pixel_steps_high, x
+        lda Y_SUB_PIXEL_STEPS_HIGH_B0, y
         ; Note: the x32 is packed into the table-data
         sta VERA_FX_Y_INCR_H
             
@@ -768,24 +808,21 @@ setup_increment_and_positions_for_overview_map:
         lda #%00001001           ; DCSEL=4, ADDRSEL=1
         sta VERA_CTRL
 
-        lda x_pixel_positions_in_map_low, x
+        lda X_PIXEL_POSITIONS_IN_MAP_LOW_B0, y
         clc
         adc CAMERA_WORLD_X_POSITION
-        sta VERA_FX_X_POS_L      ; X pixel position low [7:0]
-        lda x_pixel_positions_in_map_high, x
+        sta VERA_FX_X_POS_L       ; X pixel position low [7:0]
+        lda X_PIXEL_POSITIONS_IN_MAP_HIGH_B0, y
         adc CAMERA_WORLD_X_POSITION+1
-        ora x_subpixel_positions_in_map_low, x
-        sta VERA_FX_X_POS_H      ; X subpixel position[0], X pixel position high [10:8]
+        sta VERA_FX_X_POS_H        ; X subpixel position[0], X pixel position high [10:8]
         
-        lda y_pixel_positions_in_map_low, x
+        lda Y_PIXEL_POSITIONS_IN_MAP_LOW_B0, y
         clc
         adc CAMERA_WORLD_Y_POSITION
-        sta VERA_FX_Y_POS_L      ; Y pixel position low [7:0]
-        lda y_pixel_positions_in_map_high, x
+        sta VERA_FX_Y_POS_L        ; Y pixel position low [7:0]
+        lda Y_PIXEL_POSITIONS_IN_MAP_HIGH_B0, y
         adc CAMERA_WORLD_Y_POSITION+1
-        ora y_subpixel_positions_in_map_low, x
-        ora #%01000000           ; Reset cache byte index = 1
-        sta VERA_FX_Y_POS_H      ; Y subpixel position[0], Reset cache byte index = 1, Y pixel position high [10:8]
+        sta VERA_FX_Y_POS_H      ; Y subpixel position[0], Y pixel position high [10:8]
         
         
         ; Setting the sub position
@@ -793,10 +830,63 @@ setup_increment_and_positions_for_overview_map:
         lda #%00001011           ; DCSEL=5, ADDRSEL=1
         sta VERA_CTRL
         
-        lda x_subpixel_positions_in_map_high, x
+        lda X_SUBPIXEL_POSITIONS_IN_MAP_HIGH_B0, y
         sta VERA_FX_X_POS_S      ; X subpixel increment [8:1]
         
-        lda y_subpixel_positions_in_map_high, x
+        lda Y_SUBPIXEL_POSITIONS_IN_MAP_HIGH_B0, y
+        sta VERA_FX_Y_POS_S      ; Y subpixel increment [8:1]
+    
+        bra done_setting_up_increments_and_positions
+        
+setup_increment_and_positions_for_overview_map:
+        ; We now set the increments
+        lda x_sub_pixel_steps_low, y
+        sta VERA_FX_X_INCR_L     ; X increment low
+        
+        lda x_sub_pixel_steps_high, y
+        ; Note: the x32 is packed into the table-data
+        sta VERA_FX_X_INCR_H
+        
+        lda y_sub_pixel_steps_low, y
+        sta VERA_FX_Y_INCR_L
+        
+        lda y_sub_pixel_steps_high, y
+        ; Note: the x32 is packed into the table-data
+        sta VERA_FX_Y_INCR_H
+            
+        ; Setting the position
+        
+        lda #%00001001           ; DCSEL=4, ADDRSEL=1
+        sta VERA_CTRL
+
+        lda x_pixel_positions_in_map_low, y
+        clc
+        adc CAMERA_WORLD_X_POSITION
+        sta VERA_FX_X_POS_L      ; X pixel position low [7:0]
+        lda x_pixel_positions_in_map_high, y
+        adc CAMERA_WORLD_X_POSITION+1
+        ora x_subpixel_positions_in_map_low, y
+        sta VERA_FX_X_POS_H      ; X subpixel position[0], X pixel position high [10:8]
+        
+        lda y_pixel_positions_in_map_low, y
+        clc
+        adc CAMERA_WORLD_Y_POSITION
+        sta VERA_FX_Y_POS_L      ; Y pixel position low [7:0]
+        lda y_pixel_positions_in_map_high, y
+        adc CAMERA_WORLD_Y_POSITION+1
+        ora y_subpixel_positions_in_map_low, y
+        sta VERA_FX_Y_POS_H      ; Y subpixel position[0], Y pixel position high [10:8]
+        
+        
+        ; Setting the sub position
+        
+        lda #%00001011           ; DCSEL=5, ADDRSEL=1
+        sta VERA_CTRL
+        
+        lda x_subpixel_positions_in_map_high, y
+        sta VERA_FX_X_POS_S      ; X subpixel increment [8:1]
+        
+        lda y_subpixel_positions_in_map_high, y
         sta VERA_FX_Y_POS_S      ; Y subpixel increment [8:1]
         
 done_setting_up_increments_and_positions:
@@ -813,9 +903,9 @@ done_setting_up_increments_and_positions:
     adc #>(NR_OF_BYTES_PER_LINE)
     sta VERA_ADDR_ZP_TO+1
 
-    inx
-; FIXME: this is a bad name! We are not doing textures anymore!
-    cpx #DESTINATION_PICTURE_HEIGHT     ; we do 80 rows
+    iny
+row_count_cpy:
+    cpy #DESTINATION_PICTURE_HEIGHT     ; we do 80 rows
     beq done_tiled_perspective_copy
 
     jmp tiled_perspective_copy_next_row_1
@@ -1304,25 +1394,14 @@ next_horizontal_tile_high_vram:
 end_of_copy_tilemap_to_high_vram:
     
     
-pers_filename:      .byte    "tbl/pers-a.bin" 
-end_pers_filename:
+perspective_data_filename:      .byte    "tbl/perspective.bin" 
+end_perspective_data_filename:
 
-; This will load a PERS table using the TABLE_ROM_BANK (which starts at 1)
-load_perspective_table:
+load_perspective_data_into_banked_ram:
 
-    clc
-    lda #'a'                  ; 'a' = $61
-    adc TABLE_ROM_BANK
-    
-    ; This is a bit a of HACK/WORKAROUD: we are subtracting again from TABLE_ROM_BANK (so it always starts with 1)
-    sec
-    sbc #1                    ; since the TABLE_ROM_BANK starts at 1, we substract 1 from it
-    
-    sta end_pers_filename-5 ; 5 characters from the end is the 'a'
-
-    lda #(end_pers_filename-pers_filename) ; Length of filename
-    ldx #<pers_filename      ; Low byte of Fname address
-    ldy #>pers_filename      ; High byte of Fname address
+    lda #(end_perspective_data_filename-perspective_data_filename) ; Length of filename
+    ldx #<perspective_data_filename      ; Low byte of Fname address
+    ldy #>perspective_data_filename      ; High byte of Fname address
     jsr SETNAM
  
     lda #1            ; Logical file number
@@ -1330,145 +1409,37 @@ load_perspective_table:
     ldy #2            ; 0=ignore address in bin file (2 first bytes)
                       ; 1=use address in bin file
                       ; 2=?use address in bin file? (and dont add first 2 bytes?)
+    
     jsr SETLFS
- 
-    lda #0
-    ldx #<SOURCE_TABLE_ADDRESS
-    ldy #>SOURCE_TABLE_ADDRESS
+    
+    lda #PERSPECTIVE_DATA_RAM_BANK
+    sta RAM_BANK
+    
+    lda #0            ; load into Fixed RAM (current RAM Bank) (see https://github.com/X16Community/x16-docs/blob/master/X16%20Reference%20-%2004%20-%20KERNAL.md#function-name-load )
+    ldx #<PERSPECTIVE_DATA_RAM_ADDRESS
+    ldy #>PERSPECTIVE_DATA_RAM_ADDRESS
     jsr LOAD
-    bcc perspective_table_file_loaded
-; FIXME: do proper error handling!
+    bcc perspective_data_loaded
+    ; FIXME: do proper error handling!
     stp
-    lda TABLE_ROM_BANK
-    
-perspective_table_file_loaded:
+perspective_data_loaded:
 
     rts
 
-
-; FIXME: this is UGLY!
-copy_tables_to_banked_ram:
-
-    ; We copy 12*2=24 half-tables (12 full tables) to banked RAM, but we pack them so they are easily accessible
-
-    lda #1               ; Our first tables starts at ROM Bank 1
-    sta TABLE_ROM_BANK
-    
-next_table_to_copy:  
-    ; We calculate the address (in Banked RAM) where we have to store this table
-    lda TABLE_ROM_BANK
-    sec
-    sbc #1               ; since the TABLE_ROM_BANK starts at 1, we substract one from it
-    ; Since each ROM BANK is really half a table we divide by 2
-    lsr
-    sta TMP1             ; We store it here for now
-
-  
-    lda #<SOURCE_TABLE_ADDRESS
-    sta LOAD_ADDRESS
-    lda #>SOURCE_TABLE_ADDRESS
-    sta LOAD_ADDRESS+1
-
-    lda #<($A000)        ; We store at Ax00
-    sta STORE_ADDRESS
-    clc
-    lda #>($A000)
-    adc TMP1
-    sta STORE_ADDRESS+1
-    
-    jsr load_perspective_table
-
-    lda TABLE_ROM_BANK
-    and #%00000001      ; check if its even or odd
-    bne copy_table_even_rom_bank
-
-        ; -- Odd rom bank: angles 0-127 --
-copy_table_odd_rom_bank:
-        ldx #0                             ; x = angle
-next_angle_to_copy_to_banked_ram_odd:
-        ; Switching to RAM BANK x
-        stx RAM_BANK
-    ; FIXME: remove nop!
-        nop
-        
-        ldy #0                             ; y = screen y-line value
-next_byte_to_copy_to_banked_ram_odd:
-        lda (LOAD_ADDRESS), y
-        sta (STORE_ADDRESS), y
-        iny
-        cpy #80
-        bne next_byte_to_copy_to_banked_ram_odd
-        
-        ; We increment LOAD_ADDRESS by 80 bytes to move to the next angle
-        clc
-        lda LOAD_ADDRESS
-        adc #80
-        sta LOAD_ADDRESS
-        lda LOAD_ADDRESS+1
-        adc #0
-        sta LOAD_ADDRESS+1
-        
-        inx
-        cpx #128
-        bne next_angle_to_copy_to_banked_ram_odd
-        
-        bra rom_bank_loaded
-    
-    
-        ; -- Even rom bank: angles 128-255 --
-copy_table_even_rom_bank:
-        ldx #128                             ; x = angle
-next_angle_to_copy_to_banked_ram_even:
-        ; Switching to RAM BANK x
-        stx RAM_BANK
-    ; FIXME: remove nop!
-        nop
-        
-        ldy #0                             ; y = screen y-line value
-next_byte_to_copy_to_banked_ram_even:
-        lda (LOAD_ADDRESS), y
-        sta (STORE_ADDRESS), y
-        iny
-        cpy #80
-        bne next_byte_to_copy_to_banked_ram_even
-        
-        ; We increment LOAD_ADDRESS by 80 bytes to move to the next angle
-        clc
-        lda LOAD_ADDRESS
-        adc #80
-        sta LOAD_ADDRESS
-        lda LOAD_ADDRESS+1
-        adc #0
-        sta LOAD_ADDRESS+1
-        
-        inx
-        bne next_angle_to_copy_to_banked_ram_even
-    
-    
-rom_bank_loaded:
-
-    inc TABLE_ROM_BANK
-    lda TABLE_ROM_BANK
-    cmp #25               ; we go from 1-24 so we need to stop at 25
-    bne next_table_to_copy
-
-    rts
-end_of_copy_tables_to_banked_ram:
-    
     
     
     ; --------------------------------- BITMAP TEXTS --------------------------------------
     
 FIRMWARE_X_POS = 100
 FIRMWARE_Y_POS = 19
-FIRMWARE_RAM_BANK_START = 0
+FIRMWARE_RAM_BANK_START = 1
 vera_firmware_version_text:
     .byte 22, 5, 18, 1, 0, 6, 9, 18, 13, 23, 1, 18, 5, 0, 22, 27, 37, 27, 37, 27 ; "VERA FIRMWARE V0.0.0"
 end_of_vera_firmware_version_text:
 
 DEMO_TITLE_X_POS = 98
 DEMO_TITLE_Y_POS = 9
-DEMO_TITLE_RAM_BANK_START = 10
+DEMO_TITLE_RAM_BANK_START = 11
 demo_title_text:
     .byte 6, 24, 0, 4, 5, 13, 15, 38, 0, 39, 13, 1, 18, 9, 15, 0, 11, 1, 18, 20, 39 ; 'FX DEMO: "MARIO KART"'
 end_of_demo_title_text:
@@ -1897,3 +1868,142 @@ mario_on_kart_palette:
   .byte $22, $00 ; #0a
   .byte $8f, $00 ; #0b
   .byte $0e, $00 ; #0c
+
+
+; These three tables are used to lookup the correct perspective data
+
+begree_to_bank:
+    .byte 1,  1,  1,  1,  1,  1
+    .byte 2,  2,  2,  2,  2,  2
+    .byte 3,  3,  3,  3,  3,  3
+    .byte 4,  4,  4,  4,  4,  4
+    .byte 5,  5,  5,  5,  5,  5
+    .byte 6,  6,  6,  6,  6,  6
+    .byte 7,  7,  7,  7,  7,  7
+    .byte 8,  8,  8,  8,  8,  8
+    .byte 9,  9,  9,  9,  9,  9
+    .byte 10,  10,  10,  10,  10,  10
+    .byte 11,  11,  11,  11,  11,  11
+    .byte 12,  12,  12,  12,  12,  12
+    .byte 13,  13,  13,  13,  13,  13
+    .byte 14,  14,  14,  14,  14,  14
+    .byte 15,  15,  15,  15,  15,  15
+    .byte 16,  16,  16,  16,  16,  16
+    .byte 17,  17,  17,  17,  17,  17
+    .byte 18,  18,  18,  18,  18,  18
+    .byte 19,  19,  19,  19,  19,  19
+    .byte 20,  20,  20,  20,  20,  20
+    .byte 21,  21,  21,  21,  21,  21
+    .byte 22,  22,  22,  22,  22,  22
+    .byte 23,  23,  23,  23,  23,  23
+    .byte 24,  24,  24,  24,  24,  24
+    .byte 25,  25,  25,  25,  25,  25
+    .byte 26,  26,  26,  26,  26,  26
+    .byte 27,  27,  27,  27,  27,  27
+    .byte 28,  28,  28,  28,  28,  28
+    .byte 29,  29,  29,  29,  29,  29
+    .byte 30,  30,  30,  30,  30,  30
+    .byte 31,  31,  31,  31,  31,  31
+    .byte 32,  32,  32,  32,  32,  32
+    .byte 33,  33,  33,  33,  33,  33
+    .byte 34,  34,  34,  34,  34,  34
+    .byte 35,  35,  35,  35,  35,  35
+    .byte 36,  36,  36,  36,  36,  36
+    .byte 37,  37,  37,  37,  37,  37
+    .byte 38,  38,  38,  38,  38,  38
+    .byte 39,  39,  39,  39,  39,  39
+    .byte 40,  40,  40,  40,  40,  40
+    .byte 41,  41,  41,  41,  41,  41
+    .byte 42,  42,  42,  42,  42,  42
+    .byte 43,  43,  43,  43
+
+begree_to_a0_or_b0:
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1, 1, 1
+    .byte 0, 0, 0, 1
+
+begree_to_y_offset:
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0, 80, 160
+    .byte 0, 80, 160, 0
+  

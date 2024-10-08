@@ -46,6 +46,33 @@ clock = pygame.time.Clock()
 
 def run():
 
+    # lookup tables:
+    print()
+    print("begree_to_bank:")
+    for bank_nr in range(1,44):
+        if bank_nr == 43:
+            print('    .byte ' + ',  '.join([str(bank_nr)]*4))
+        else:
+            print('    .byte ' + ',  '.join([str(bank_nr)]*6))
+            
+    print()
+    print("begree_to_a0_or_b0:")
+    for bank_nr in range(1,44):
+        if bank_nr == 43:
+            print('    .byte 0, 0, 0, 1')
+        else:
+            print('    .byte 0, 0, 0, 1, 1, 1')
+            
+    print()
+    print("begree_to_y_offset:")
+    for bank_nr in range(1,44):
+        if bank_nr == 43:
+            print('    .byte 0, 80, 160, 0')
+        else:
+            print('    .byte 0, 80, 160, 0, 80, 160')
+    
+    
+
     texture = [[0 for x in range(map_pixel_width)] for y in range(map_pixel_height)] 
         
     # filling texture as a tile map
@@ -90,8 +117,10 @@ def run():
     all_angles_y_subpixel_positions_in_map_high = []
     all_angles_x_pixel_positions_in_map_low = []
     all_angles_x_pixel_positions_in_map_high = []
+    all_angles_x_pixel_positions_in_map_high_packed = []
     all_angles_y_pixel_positions_in_map_low = []
     all_angles_y_pixel_positions_in_map_high = []
+    all_angles_y_pixel_positions_in_map_high_packed = []
     all_angles_addresses_in_texture_low = []
     all_angles_addresses_in_texture_high = []
     all_angles_x_sub_pixel_steps_low = []
@@ -107,18 +136,18 @@ def run():
         
     for angle_index in range(angle_start, angle_max):
     
-        x_subpixel_positions_in_map_low = []
+        x_subpixel_positions_in_map_low = [] # Only used for SIM
         x_subpixel_positions_in_map_high = []
-        y_subpixel_positions_in_map_low = []
+        y_subpixel_positions_in_map_low = [] # Only used for SIM
         y_subpixel_positions_in_map_high = []
         x_pixel_positions_in_map_low = []
         x_pixel_positions_in_map_high = []
+        x_pixel_positions_in_map_high_packed = []
         y_pixel_positions_in_map_low = []
         y_pixel_positions_in_map_high = []
-        x_sub_pixel_steps_decr = []
+        y_pixel_positions_in_map_high_packed = []
         x_sub_pixel_steps_low = []
         x_sub_pixel_steps_high = []
-        y_sub_pixel_steps_decr = []
         y_sub_pixel_steps_low = []
         y_sub_pixel_steps_high = []
 
@@ -194,10 +223,8 @@ def run():
             
             # print(sub_pixel_increment_x*64*256, sub_pixel_increment_y*64*256)
             
+            # -- Increments --
             
-            y_pixel_position_in_map = (start_sy * scaling) % max_y_position_in_map
-            x_pixel_position_in_map = (start_sx * scaling) % max_x_position_in_map
-
             x_sub_pixel_step = int(sub_pixel_increment_x * scaling * 512)
             y_sub_pixel_step = int(sub_pixel_increment_y * scaling * 512)
             
@@ -215,25 +242,36 @@ def run():
 
             y_sub_pixel_steps_low.append(int(y_sub_pixel_step) % 256)
             y_sub_pixel_steps_high.append(int(y_sub_pixel_step) // 256)
+            
+            # -- Positions --
+            
+            y_pixel_position_in_map = (start_sy * scaling) % max_y_position_in_map
+            x_pixel_position_in_map = (start_sx * scaling) % max_x_position_in_map
 
             x_subpixel_position_in_map = int(((x_pixel_position_in_map % 1)*512)%512)
             y_subpixel_position_in_map = int(((y_pixel_position_in_map % 1)*512)%512)
             
             # Note: we need only the lowest bit into the _low array here. And it has to be put into the slot of the 7th bit, so a multiply by 128
-            x_subpixel_positions_in_map_low.append(int(x_subpixel_position_in_map % 2) * 128)
+            x_subpixel_position_in_map_low = int(x_subpixel_position_in_map % 2) * 128
+            x_subpixel_positions_in_map_low.append(int(x_subpixel_position_in_map % 2) * 128) # only used for SIM
             x_subpixel_positions_in_map_high.append(int(x_subpixel_position_in_map // 2))
             
 # FIXME: we could also pack the reset cache reset bit into y_subpixel_positions_in_map_low!
             # Note: we need only the lowest bit into the _low array here. And it has to be put into the slot of the 7th bit, so a multiply by 128
-            y_subpixel_positions_in_map_low.append(int(y_subpixel_position_in_map % 2) * 128)
+            y_subpixel_position_in_map_low = int(y_subpixel_position_in_map % 2) * 128
+            y_subpixel_positions_in_map_low.append(int(y_subpixel_position_in_map % 2) * 128) # only used for SIM
             y_subpixel_positions_in_map_high.append(int(y_subpixel_position_in_map // 2))
             
             x_pixel_positions_in_map_low.append(int(x_pixel_position_in_map % 256))
             x_pixel_positions_in_map_high.append(int(x_pixel_position_in_map // 256))
+            # Packing subpixel position lowest bit
+            x_pixel_positions_in_map_high_packed.append(int(x_pixel_position_in_map // 256) + x_subpixel_position_in_map_low)
             
             y_pixel_positions_in_map_low.append(int(y_pixel_position_in_map % 256))
             y_pixel_positions_in_map_high.append(int(y_pixel_position_in_map // 256))
-            
+            # Packing subpixel position lowest bit
+            y_pixel_positions_in_map_high_packed.append(int(y_pixel_position_in_map // 256) + y_subpixel_position_in_map_low)
+
             
         # ========= SIMULATING USING THE SAME DATA ==========
         
@@ -315,9 +353,11 @@ def run():
             
             all_angles_x_pixel_positions_in_map_low += x_pixel_positions_in_map_low
             all_angles_x_pixel_positions_in_map_high += x_pixel_positions_in_map_high
+            all_angles_x_pixel_positions_in_map_high_packed += x_pixel_positions_in_map_high_packed
             
             all_angles_y_pixel_positions_in_map_low += y_pixel_positions_in_map_low
             all_angles_y_pixel_positions_in_map_high += y_pixel_positions_in_map_high
+            all_angles_y_pixel_positions_in_map_high_packed += y_pixel_positions_in_map_high_packed
             
             all_angles_x_sub_pixel_steps_low += x_sub_pixel_steps_low
             all_angles_x_sub_pixel_steps_high += x_sub_pixel_steps_high
@@ -326,9 +366,6 @@ def run():
             all_angles_y_sub_pixel_steps_high += y_sub_pixel_steps_high
         
     if not DO_SINGLE_ANGLE:
-        half_index = (angle_max // 2) * (end_y-start_y) # We have nr angles times nr of rows on screen
-        filler_size = 16 * 1024 - half_index  # We need 16kB files (so we need a filler size)
-        filler = [0] * filler_size
     
         # FIXME: we do not want a filler added when loading these files from an SD card! (its better to fill in the assembler when including these files in a ROM)
         
@@ -336,10 +373,10 @@ def run():
         #       for one type of byte (say x-low-increment) you need 80 bytes for one screen. You access each row by doing 'lda X_SUB_PIXEL_STEPS_LOW, x'
         #       that 'x' however never exceeds 80. So you could fit THREE angles in 256 bytes (3*80 < 256).
         #
-        #         $A000-A0FF: | x-low-increment (0-begrees) : 80 bytes  | x-low-increment (1-begrees) : 80 bytes  | x-low-increment (2-begrees) : 80 bytes |
-        #         $A100-A1FF: | y-low-increment (0-begrees) : 80 bytes  | y-low-increment (1-begrees) : 80 bytes  | y-low-increment (2-begrees) : 80 bytes |
-        #         $A200-A2FF: | x-high-increment (0-begrees) : 80 bytes | x-high-increment (1-begrees) : 80 bytes | x-high-increment (2-begrees) : 80 bytes |
-        #         $A300-A3FF: | y-high-increment (0-begrees) : 80 bytes | y-high-increment (1-begrees) : 80 bytes | y-high-increment (2-begrees) : 80 bytes |
+        #         $A000-A0FF: | x-high-increment (0-begrees) : 80 bytes | x-high-increment (1-begrees) : 80 bytes | x-high-increment (2-begrees) : 80 bytes |
+        #         $A100-A1FF: | y-high-increment (0-begrees) : 80 bytes | y-high-increment (1-begrees) : 80 bytes | y-high-increment (2-begrees) : 80 bytes |
+        #         $A200-A2FF: | x-low-increment (0-begrees) : 80 bytes  | x-low-increment (1-begrees) : 80 bytes  | x-low-increment (2-begrees) : 80 bytes |
+        #         $A300-A3FF: | y-low-increment (0-begrees) : 80 bytes  | y-low-increment (1-begrees) : 80 bytes  | y-low-increment (2-begrees) : 80 bytes |
         #         $A400-A4FF: | x-pos-high (+ 1 sub bit)
         #         $A500-A5FF: | y-pos-high (+ 1 sub bit)
         #         $A600-A6FF: | x-pos-low
@@ -349,10 +386,10 @@ def run():
         
         #         $AA00-AFFF: | <not used>
         
-        #         $B000-B0FF: | x-low-increment (3-begrees) : 80 bytes  | x-low-increment (4-begrees) : 80 bytes  | x-low-increment (5-begrees) : 80 bytes |
-        #         $B100-B1FF: | y-low-increment (3-begrees) : 80 bytes  | y-low-increment (4-begrees) : 80 bytes  | y-low-increment (5-begrees) : 80 bytes |
-        #         $B200-B2FF: | x-high-increment (3-begrees) : 80 bytes | x-high-increment (4-begrees) : 80 bytes | x-high-increment (5-begrees) : 80 bytes |
-        #         $B300-B3FF: | y-high-increment (3-begrees) : 80 bytes | y-high-increment (4-begrees) : 80 bytes | y-high-increment (5-begrees) : 80 bytes |
+        #         $B000-B0FF: | x-high-increment (3-begrees) : 80 bytes | x-high-increment (4-begrees) : 80 bytes | x-high-increment (5-begrees) : 80 bytes |
+        #         $B100-B1FF: | y-high-increment (3-begrees) : 80 bytes | y-high-increment (4-begrees) : 80 bytes | y-high-increment (5-begrees) : 80 bytes |
+        #         $B200-B2FF: | x-low-increment (3-begrees) : 80 bytes  | x-low-increment (4-begrees) : 80 bytes  | x-low-increment (5-begrees) : 80 bytes |
+        #         $B300-B3FF: | y-low-increment (3-begrees) : 80 bytes  | y-low-increment (4-begrees) : 80 bytes  | y-low-increment (5-begrees) : 80 bytes |
         #         $B400-B4FF: | x-pos-high (+ 1 sub bit)
         #         $B500-B5FF: | y-pos-high (+ 1 sub bit)
         #         $B600-B6FF: | x-pos-low
@@ -370,7 +407,54 @@ def run():
         
         # That way 6 begrees can fit into ONE RAM bank, meaning 256 begrees will fit into 256 / 6 = 43 RAM banks (~344kB)
         
-
+        packed_perspective_data = []
+        
+        keep_packing = True
+        row_index = 0
+        row_length = 240
+        half_bank_filler = [0] * (256*6)
+        nr_of_half_banks = 0
+        while (keep_packing):
+        
+            row_filler = [0] * (256-row_length)
+        
+            # Increments
+            packed_perspective_data += all_angles_x_sub_pixel_steps_high[row_index:row_index+row_length] + row_filler
+            packed_perspective_data += all_angles_y_sub_pixel_steps_high[row_index:row_index+row_length] + row_filler
+            packed_perspective_data += all_angles_x_sub_pixel_steps_low[row_index:row_index+row_length] + row_filler
+            packed_perspective_data += all_angles_y_sub_pixel_steps_low[row_index:row_index+row_length] + row_filler
+            
+            # Positions
+            packed_perspective_data += all_angles_x_pixel_positions_in_map_high_packed[row_index:row_index+row_length] + row_filler
+            packed_perspective_data += all_angles_y_pixel_positions_in_map_high_packed[row_index:row_index+row_length] + row_filler
+            packed_perspective_data += all_angles_x_pixel_positions_in_map_low[row_index:row_index+row_length] + row_filler
+            packed_perspective_data += all_angles_y_pixel_positions_in_map_low[row_index:row_index+row_length] + row_filler
+            packed_perspective_data += all_angles_x_subpixel_positions_in_map_high[row_index:row_index+row_length] + row_filler
+            packed_perspective_data += all_angles_y_subpixel_positions_in_map_high[row_index:row_index+row_length] + row_filler
+            
+            packed_perspective_data += half_bank_filler
+            
+            row_index += 240
+            nr_of_half_banks += 1
+            
+            if (nr_of_half_banks == 85):
+                # The last half bank has a row_length of 80
+                row_length = 80
+            if (nr_of_half_banks > 85):
+                keep_packing = False
+        
+        
+        tableFile = open('SD/TBL/PERSPECTIVE.BIN', "wb")
+        tableFile.write(bytearray(packed_perspective_data))
+        tableFile.close()
+        print("Perspective FX data written to file: " + 'SD/TBL/PERSPECTIVE.BIN')
+        
+        '''
+        
+        half_index = (angle_max // 2) * (end_y-start_y) # We have nr angles times nr of rows on screen
+        filler_size = 16 * 1024 - half_index  # We need 16kB files (so we need a filler size)
+        filler = [0] * filler_size
+        
         map_file = {
             "x_subpixel_positions_in_map_low1" : "SD/TBL/PERS-A.BIN",
             "x_subpixel_positions_in_map_low2" : "SD/TBL/PERS-B.BIN",
@@ -493,7 +577,9 @@ def run():
         tableFile = open(map_file["y_sub_pixel_steps_high2"], "wb")
         tableFile.write(bytearray(all_angles_y_sub_pixel_steps_high[half_index:]+filler))
         tableFile.close()
+        '''
         
+    '''
     running = True
     while running:
         # TODO: We might want to set this to max?
@@ -505,6 +591,7 @@ def run():
                 running = False
                 
         time.sleep(0.5)
+    '''
     
         
     pygame.quit()

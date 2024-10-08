@@ -22,7 +22,7 @@ This will generate a PRG in the SD folder.
 # Run using the emulator
 To run using the emulator go to the SD folder and run this:
 
-```x16emu.exe -ram 2048 -prg SUPER-MARIO-KART.PRG -run```
+```x16emu.exe -prg SUPER-MARIO-KART.PRG -run```
 
 # Run on real hardware
 
